@@ -40,7 +40,8 @@ def build_model(is_training, inputs, params):
     gate = tf.sigmoid(gate)
     activation = tf.multiply(out, gate)
 
-    return mixture_of_expert(activation, 2, params)
+    # return mixture_of_expert(activation, params.num_mixtures, params)
+    return MoE_with_gate(activation, is_training, params.num_mixtures, params)
 
 
 def net_vlad(is_training, features, params, feature_size):
@@ -71,14 +72,13 @@ def net_vlad(is_training, features, params, feature_size):
     prob_sum = tf.reduce_sum(aggregation, -2, keep_dims=True)
     cluster_weights = tf.get_variable("cluster_weights",
                                        [1, feature_size, params.vlad_cluster_size],
-                                      initializer = tf.random_normal_initializer(stddev=1 / math.sqrt(feature_size)))
+                                      initializer=tf.random_normal_initializer(stddev=1 / math.sqrt(feature_size)))
     cluster_center = tf.multiply(prob_sum, cluster_weights)  # element-wise multiply
     aggregation = tf.transpose(aggregation, perm=[0, 2, 1])
 
     vlad = tf.matmul(aggregation, features)
     vlad = tf.transpose(vlad, perm=[0, 2, 1])
     vlad = tf.subtract(vlad, cluster_center)
-    assert vlad.get_shape().as_list() == [params.batch_size, feature_size, params.vlad_cluster_size]
 
     vlad = tf.nn.l2_normalize(vlad, 1)
     vlad = tf.reshape(vlad, [-1, params.vlad_cluster_size * feature_size])
@@ -128,6 +128,49 @@ def mixture_of_expert(features, num_mixtures, params):
     return final_probabilities
 
 
+def MoE_with_gate(features, is_training, num_mixtures, params):
+    gate_activations = slim.fully_connected(
+        features,
+        params.vocab_size * (num_mixtures + 1),
+        activation_fn=None,
+        biases_initializer=None,
+        weights_regularizer=slim.l2_regularizer(params.moe_l2),
+        scope="gates")
+
+    expert_activations = slim.fully_connected(
+        features,
+        params.vocab_size * num_mixtures,
+        activation_fn=None,
+        weights_regularizer=slim.l2_regularizer(params.moe_l2),
+        scope="experts")
+
+    gating_distribution = tf.nn.softmax(tf.reshape(
+        gate_activations,
+        [-1, num_mixtures + 1]))  # (Batch * #Labels) x (num_mixtures + 1)
+    expert_distribution = tf.nn.sigmoid(tf.reshape(
+        expert_activations,
+        [-1, num_mixtures]))  # (Batch * #Labels) x num_mixtures
+
+    probabilities_by_class_and_batch = tf.reduce_sum(
+        gating_distribution[:, :num_mixtures] * expert_distribution, 1)
+    probabilities = tf.reshape(probabilities_by_class_and_batch,
+                               [-1, params.vocab_size])
+
+    gating_weights = tf.get_variable("gating_prob_weights",
+                                     [params.vocab_size, params.vocab_size],
+                                     initializer=tf.random_normal_initializer(stddev=1 / math.sqrt(params.vocab_size)))
+    gates = tf.matmul(probabilities, gating_weights)
+
+    gates = slim.batch_norm(
+        gates,
+        center=True,
+        scale=True,
+        is_training=is_training,
+        scope="gating_prob_bn")
+    gates = tf.sigmoid(gates)
+    return tf.multiply(probabilities, gates)
+
+
 def logistic_regression(features, params):
     """Creates a logistic regression.
     Args:
@@ -161,7 +204,7 @@ def model_fn(mode, inputs, params, reuse=False):
     is_training = (mode == 'train')
     labels = inputs['labels']
     labels = tf.cast(labels, tf.int64)
-    assert labels.get_shape().as_list() == [params.batch_size, params.vocab_size]
+    # assert labels.get_shape().as_list() == [params.batch_size, params.vocab_size]
 
     # -----------------------------------------------------------
     # MODEL: define the layers of the model
@@ -170,15 +213,27 @@ def model_fn(mode, inputs, params, reuse=False):
         probabilities = build_model(is_training, inputs, params)
 
 
-    assert probabilities.get_shape().as_list() == [params.batch_size, params.vocab_size]
+    #assert probabilities.get_shape().as_list() == [params.batch_size, params.vocab_size]
 
     loss = calculate_loss(probabilities, labels)
+    reg_loss = tf.add_n(tf.losses.get_regularization_losses())
+    loss = loss + params.regularisation_lambda * reg_loss
 
     # Define training step that minimizes the loss with the Adam optimizer
     if is_training:
-
-        optimizer = tf.train.AdamOptimizer(params.learning_rate)
         global_step = tf.train.get_or_create_global_step()
+        learning_rate_with_decay = tf.train.exponential_decay(
+            params.learning_rate,
+            global_step * params.batch_size_train,
+            params.learning_rate_decay_steps,
+            params.learning_rate_decay,
+            staircase=True)
+
+        optimizer = tf.train.AdamOptimizer(learning_rate_with_decay)
+        gradients, variables = zip(*optimizer.compute_gradients(loss))
+        gradients, _ = tf.clip_by_global_norm(gradients, params.gradient_clip_norm)
+        gradient_clip_op = optimizer.apply_gradients(zip(gradients, variables))
+
         if params.use_batch_norm:
             # Add a dependency to update the moving mean and variance for batch normalization
             with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
@@ -188,13 +243,14 @@ def model_fn(mode, inputs, params, reuse=False):
 
     model_spec = inputs
     model_spec['variable_init_op'] = tf.global_variables_initializer()
-    model_spec['summary_op'] = tf.summary.merge_all()
     model_spec['loss'] = loss
     model_spec['labels'] = labels
     model_spec['probabilities'] = probabilities
 
     if is_training:
+        model_spec['gradient_clip_op'] = gradient_clip_op
         model_spec['train_op'] = train_op
+        model_spec['learning_rate'] = learning_rate_with_decay
 
     return model_spec
 

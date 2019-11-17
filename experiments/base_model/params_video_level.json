@@ -1,0 +1,26 @@
+{
+    "learning_rate": 0.0002,
+    "batch_size_train": 64,
+    "batch_size_eval": 1024,
+    "num_epochs": 16,
+    "use_batch_norm": true,
+    "bn_momentum": 0.999,
+    "num_parallel_calls": 4,
+    "save_summary_steps": 1,
+    "evaluate_steps": 10,
+
+
+    "vlad_cluster_size": 256,
+    "fc_size": 1024,
+    "moe_l2": 1e-6,
+    "vocab_size": 1000,
+    "num_mixtures": 2,
+
+    "learning_rate_decay": 0.8,
+    "learning_rate_decay_steps": 4000000,
+
+    "max_frames": 300,
+
+    "regularisation_lambda": 1,
+    "gradient_clip_norm": 1
+}

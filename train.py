@@ -6,17 +6,14 @@ import os
 
 import tensorflow as tf
 
-from model.input_fn import input_fn
+from model.input_fn import Reader
 from model.utils import Params
 from model.utils import set_logger
 from model.model_fn import model_fn
-from model.training import train_and_evaluate
-
-
-#TODO: -W ignore::UserWarning
+from model.training import Trainer
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default='experiments/test',
+parser.add_argument('--model_dir', default='experiments/base_model',
                     help="Experiment directory containing params.json")
 parser.add_argument('--data_dir', default='input',
                     help="Directory containing the dataset")
@@ -25,11 +22,12 @@ parser.add_argument('--restore_from', default=None,
 
 
 if __name__ == '__main__':
+    #tf.enable_eager_execution()
     # Set the random seed for the whole graph for reproductible experiments
     tf.set_random_seed(230)
     # Load the parameters from json file
     args = parser.parse_args()
-    json_path = os.path.join(args.model_dir, 'params.json')
+    json_path = os.path.join(args.model_dir, 'params_video_level.json')
     assert os.path.isfile(
         json_path), "No json configuration file found at {}".format(json_path)
     params = Params(json_path)
@@ -56,16 +54,21 @@ if __name__ == '__main__':
     dev_filenames = [os.path.join(dev_data_dir, f) for f in os.listdir(dev_data_dir)]
 
     # Create the two iterators over the two datasets
-    train_inputs = input_fn(True, train_filenames, params)
-    dev_inputs = input_fn(False, dev_filenames, params)
+    train_reader = Reader(True, train_filenames, params)
+    dev_reader = Reader(False, train_filenames, params)
+    train_inputs = train_reader.input_fn()
+    dev_inputs = dev_reader.input_fn()
 
 
     # Define the model
     logging.info("Creating the model...")
     train_model_spec = model_fn('train', train_inputs, params)
-    dev_model_spec = model_fn('eval', dev_inputs, params, reuse=True)
+    eval_model_spec = model_fn('eval', dev_inputs, params, reuse=True)
 
     # Train the model
     logging.info("Starting training for {} epoch(s)".format(params.num_epochs))
-    train_and_evaluate(train_model_spec, dev_model_spec,
-                       args.model_dir, params, args.restore_from)
+    trainer = Trainer(train_model_spec, eval_model_spec,
+                      args.model_dir, params, args.restore_from)
+    trainer.train_and_evaluate()
+    # train_and_evaluate(train_model_spec, eval_model_spec,
+    #                    args.model_dir, params, args.restore_from)

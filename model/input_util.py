@@ -73,7 +73,6 @@ def get_video_matrix(features,
 
     Returns:
       feature_matrix: matrix of all frame-features
-      num_frames: number of frames in the sequence
     """
     decoded_features = tf.reshape(
         tf.cast(tf.decode_raw(features, tf.uint8), tf.float32),

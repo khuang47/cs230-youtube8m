@@ -3,13 +3,14 @@
 import logging
 import os
 
-from tqdm import trange
 import tensorflow as tf
+import metrics.eval_util as eval_util
+from tensorflow.core.framework import summary_pb2
 
 from model.utils import save_dict_to_json
 
 
-def evaluate_sess(sess, model_spec, writer=None):
+def evaluate_sess(sess, global_step_val, eval_model_spec, eval_writer, saver, params, model_dir):
     """Train the model on `num_steps` batches.
 
     Args:
@@ -19,24 +20,22 @@ def evaluate_sess(sess, model_spec, writer=None):
         writer: (tf.summary.FileWriter) writer for summaries. Is None if we don't log anything
         params: (Params) hyperparameters
     """
-    update_metrics = model_spec['update_metrics']
-    eval_metrics = model_spec['metrics']
-    global_step = tf.train.get_global_step()
+    probabilities = eval_model_spec['probabilities']
+    labels = eval_model_spec['labels']
+    loss = eval_model_spec['loss']
+    #global_step = tf.train.get_global_step()
 
     # Load the evaluation dataset into the pipeline and initialize the metrics init op
-    sess.run(model_spec['iterator_init_op'])
-    sess.run(model_spec['metrics_init_op'])
+    sess.run(eval_model_spec['iterator_init_op'])
 
     # compute metrics over the dataset
-    while True:
-        try:
-            sess.run(update_metrics)
-            metrics_values = {k: v[0] for k, v in eval_metrics.items()}
-            metrics_val = sess.run(metrics_values)
-            metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
-            logging.info("- Eval metrics [batch]: " + metrics_string)
-        except tf.errors.OutOfRangeError:
-            break
+    try:
+        loss_val, labels_val, probabilities_val = sess.run([loss, labels, probabilities])
+        gap = eval_util.calculate_gap(probabilities_val, labels_val)
+        logging.info("- Evaluation metrics after " + ("%d" % global_step_val) + "steps: " + " GAP: " +
+                     ("%.2f" % gap) + " Loss: " + str(loss_val))
+    except tf.errors.OutOfRangeError:
+        logging.info("Reach the end of eval dataset.")
 
     # Get the values of the metrics
     metrics_values = {k: v[0] for k, v in eval_metrics.items()}
