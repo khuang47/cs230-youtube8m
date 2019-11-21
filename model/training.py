@@ -6,6 +6,7 @@ import tensorflow as tf
 import metrics.eval_util as eval_util
 from tensorflow.core.framework import summary_pb2
 
+
 class Trainer:
     def __init__(self, train_model_spec, eval_model_spec, model_dir, params, restore_from=None):
         self.train_model_spec = train_model_spec
@@ -136,10 +137,12 @@ class Trainer:
         # Initialize tf.Saver instances to save weights during training
         #last_saver = tf.train.Saver() # will keep last 5 epochs
         #train_saver = tf.train.Saver() # will keep last 5 epochs
-        best_saver = tf.train.Saver(max_to_keep=1)
 
+        video_level_varlist = {v.name[len("video_level_model/"):]: v
+                               for v in tf.get_collection(tf.GraphKeys.VARIABLES, scope="video_level_model/")}
+        best_saver = tf.train.Saver(var_list=video_level_varlist,
+                                    max_to_keep=1)
 
-        begin_at_epoch = 0
 
         with tf.Session() as sess:
             # Initialize model variables
@@ -150,15 +153,15 @@ class Trainer:
                 logging.info("Restoring parameters from {}".format(self.restore_from))
                 if os.path.isdir(self.restore_from):
                     restore_from = tf.train.latest_checkpoint(self.restore_from)
-                    begin_at_epoch = int(restore_from.split('-')[-1])
+
                 best_saver.restore(sess, restore_from)
 
             # For tensorboard (takes care of writing summaries to files)
             train_writer = tf.summary.FileWriter(os.path.join(self.model_dir, 'train_summaries'), sess.graph)
             eval_writer = tf.summary.FileWriter(os.path.join(self.model_dir, 'eval_summaries'), sess.graph)
 
-            for epoch in range(begin_at_epoch, begin_at_epoch + self.params.num_epochs):
+            for epoch in range(0, self.params.num_epochs):
                 # Run one epoch
-                logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + self.params.num_epochs))
+                logging.info("Epoch {}/{}".format(epoch + 1, 1 + self.params.num_epochs))
                 # Compute number of batches in one epoch (one full pass over the training set)
                 self.train_sess(sess, train_writer, eval_writer, best_saver)

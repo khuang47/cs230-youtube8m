@@ -19,10 +19,13 @@ parser.add_argument('--data_dir', default='input',
                     help="Directory containing the dataset")
 parser.add_argument('--restore_from', default=None,
                     help="Optional, directory or file containing weights to reload before training")
+parser.add_argument('--train_data_dir', default='input/train',
+                    help="train dataset dir")
+parser.add_argument('--dev_data_dir', default='input/dev',
+                    help="dev dataset dir")
 
 
 if __name__ == '__main__':
-    #tf.enable_eager_execution()
     # Set the random seed for the whole graph for reproductible experiments
     tf.set_random_seed(230)
     # Load the parameters from json file
@@ -46,8 +49,8 @@ if __name__ == '__main__':
     # Create the input data pipeline
     logging.info("Creating the datasets...")
     data_dir = args.data_dir
-    train_data_dir = os.path.join(data_dir, "train")
-    dev_data_dir = os.path.join(data_dir, "dev")
+    train_data_dir = args.train_data_dir
+    dev_data_dir = args.dev_data_dir
 
     # Get the filenames from the train and dev sets
     train_filenames = [os.path.join(train_data_dir, f) for f in os.listdir(train_data_dir)]
@@ -55,10 +58,9 @@ if __name__ == '__main__':
 
     # Create the two iterators over the two datasets
     train_reader = Reader(True, train_filenames, params)
-    dev_reader = Reader(False, train_filenames, params)
+    dev_reader = Reader(False, dev_filenames, params)
     train_inputs = train_reader.input_fn()
     dev_inputs = dev_reader.input_fn()
-
 
     # Define the model
     logging.info("Creating the model...")
@@ -70,5 +72,4 @@ if __name__ == '__main__':
     trainer = Trainer(train_model_spec, eval_model_spec,
                       args.model_dir, params, args.restore_from)
     trainer.train_and_evaluate()
-    # train_and_evaluate(train_model_spec, eval_model_spec,
-    #                    args.model_dir, params, args.restore_from)
+
