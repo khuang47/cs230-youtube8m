@@ -16,17 +16,16 @@ class Trainer:
         self.restore_from = restore_from
         self.eval_best_gap = 0  # best global average precision on evaluation set after certain steps.
 
-    def train_sess(self, sess, train_writer, eval_writer, saver):
+    def train_sess(self, sess, train_writer, eval_writer, saver, epoch_val):
         """Train the model for one epoch. It will save checkpoints and evaluate the model
         based on dev set along the way.
 
         Args:
             sess: (tf.Session) current session
-            model_spec: (dict) contains the graph operations or nodes needed for training
-            writer: (tf.summary.FileWriter) writer for summaries
+            train_writer: (tf.summary.FileWriter) summary writer for training
+            eval_writer: (tf.summary.FileWriter) summary writer for evaluation
             saver: (tf.train.Saver) saver to save weights/checkpoints
-            params: (Params) hyper-parameters
-            model_dir: (string) directory containing config, weights and log
+            epoch_val: epoch number
         """
         # Get relevant graph operations or nodes needed for training
         probabilities = self.train_model_spec['probabilities']
@@ -40,10 +39,7 @@ class Trainer:
         learning_rate = self.train_model_spec['learning_rate']
 
         sess.run(self.train_model_spec['iterator_init_op'])
-        #assert probabilities.get_shape().as_list() == [self.params.batch_size, self.params.vocab_size]
-        #assert labels.get_shape().as_list() == [self.params.batch_size, self.params.vocab_size]
 
-        # steps = 0 # TODO: maybe it can be replaced by global_step_val
         global_step_val = 0
         while True:
             try:
@@ -64,9 +60,10 @@ class Trainer:
 
                     gap = eval_util.calculate_gap(probabilities_val, labels_val)
 
-                    logging.info("- Train metrics [in batch]: " + " GAP: " +
+                    logging.info("- Train metrics: " + " GAP: " +
                                  ("%.2f" % gap) + " Loss: " + str(loss_val) +
-                                 " Learning rate: " + str(learning_rate_val))
+                                 " Learning rate: " + str(learning_rate_val) +
+                                 " Epoch: " + ("%d" % epoch_val) + " Step: " + ("%d" % global_step_val))
 
                     train_gap_summary = summary_pb2.Summary.Value(tag="gAP(training)", simple_value=gap)
                     train_loss_summary = summary_pb2.Summary.Value(tag="loss(training)", simple_value=loss_val)
@@ -79,25 +76,22 @@ class Trainer:
                     # Evaluate on eval set
                     self.evaluate_sess(sess, global_step_val, eval_writer, saver)
 
-                # steps = steps + 1
-
             except tf.errors.OutOfRangeError:
                 break
 
     def evaluate_sess(self, sess, global_step_val, eval_writer, saver):
-        """Train the model on `num_steps` batches.
+        """Evaluation the model on evaluation set after certain steps.
 
         Args:
             sess: (tf.Session) current session
-            model_spec: (dict) contains the graph operations or nodes needed for training
-            num_steps: (int) train for this number of batches
-            writer: (tf.summary.FileWriter) writer for summaries. Is None if we don't log anything
-            params: (Params) hyperparameters
+            global_step_val: global step number
+            eval_writer: (tf.summary.FileWriter) summary writer for evaluation
+            saver: (tf.train.Saver) saver to save weights/checkpoints.
+                Save the weights after better precision found.
         """
         probabilities = self.eval_model_spec['probabilities']
         labels = self.eval_model_spec['labels']
         loss = self.eval_model_spec['loss']
-        #global_step = tf.train.get_global_step()
 
         # Load the evaluation dataset into the pipeline and initialize the metrics init op
         sess.run(self.eval_model_spec['iterator_init_op'])
@@ -125,24 +119,12 @@ class Trainer:
 
     def train_and_evaluate(self):
         """Train the model and evaluate every epoch.
-
-        Args:
-            train_model_spec: (dict) contains the graph operations or nodes needed for training
-            eval_model_spec: (dict) contains the graph operations or nodes needed for evaluation
-            model_dir: (string) directory containing config, weights and log
-            params: (Params) contains hyperparameters of the model.
-                    Must define: num_epochs, train_size, batch_size, eval_size, save_summary_steps
-            restore_from: (string) directory or file containing weights to restore the graph
         """
         # Initialize tf.Saver instances to save weights during training
-        #last_saver = tf.train.Saver() # will keep last 5 epochs
-        #train_saver = tf.train.Saver() # will keep last 5 epochs
-
         video_level_varlist = {v.name[len("video_level_model/"):]: v
                                for v in tf.get_collection(tf.GraphKeys.VARIABLES, scope="video_level_model/")}
         best_saver = tf.train.Saver(var_list=video_level_varlist,
                                     max_to_keep=1)
-
 
         with tf.Session() as sess:
             # Initialize model variables
@@ -160,8 +142,8 @@ class Trainer:
             train_writer = tf.summary.FileWriter(os.path.join(self.model_dir, 'train_summaries'), sess.graph)
             eval_writer = tf.summary.FileWriter(os.path.join(self.model_dir, 'eval_summaries'), sess.graph)
 
-            for epoch in range(0, self.params.num_epochs):
+            for epoch in range(1, self.params.num_epochs + 1):
                 # Run one epoch
-                logging.info("Epoch {}/{}".format(epoch + 1, 1 + self.params.num_epochs))
+                logging.info("Epoch {}/{}".format(epoch, self.params.num_epochs))
                 # Compute number of batches in one epoch (one full pass over the training set)
-                self.train_sess(sess, train_writer, eval_writer, best_saver)
+                self.train_sess(sess, train_writer, eval_writer, best_saver, epoch)

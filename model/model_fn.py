@@ -65,9 +65,8 @@ class Youtube8mModel:
         """NetVLAD.
 
         Args:
-            is_training: (bool) whether we are training or not
-            features: (tensor) feature inputs. Either rgb(num_batch, num_frames, 1024) or audio(num_batch, num_frames, 128).
-            params: (Params) hyper-parameters
+            features: (tensor) feature inputs. Either rgb(num_batch, num_frames, 1024) or
+                audio(num_batch, num_frames, 128).
             feature_size: feature size of each frame. rgb is 1024, audio is 128.
         Returns:
             vlad: Vector of Locally Aggregated Descriptors.
@@ -107,14 +106,12 @@ class Youtube8mModel:
 
         return vlad
 
-
     def mixture_of_expert(self, features, num_mixtures):
         """A softmax over a mixture of logistic models (with L2 regularization).
 
         Args:
           features: (tensor) features after fully connected layer and context gating layer.
           num_mixtures: number of experts.
-          params: (Params) hyper-parameters
 
         Returns:
           A tensor containing the probability predictions (batch_size x num_classes).
@@ -153,6 +150,16 @@ class Youtube8mModel:
         return final_probabilities
 
     def moe_with_gate(self, features, num_mixtures):
+        """Creates a MoE classifier with gate.
+        Args:
+          features: (tensor) feature inputs. Either rgb(num_batch, num_frames, 1024)
+            or audio(num_batch, num_frames, 128).
+          num_mixtures: number of experts for this layer.
+        Returns:
+          A dictionary with a tensor containing the probability predictions of the
+          model in the 'predictions' key. The dimensions of the tensor are
+          batch_size x num_classes.
+        """
         gate_activations = slim.fully_connected(
             features,
             self.params.vocab_size * (num_mixtures + 1),
@@ -204,10 +211,10 @@ class Youtube8mModel:
         return tf.multiply(probabilities, gates)
 
     def logistic_regression(self, features):
-        """Creates a logistic regression.
+        """Creates a logistic regression classifier.
         Args:
-          features: (tensor) feature inputs. Either rgb(num_batch, num_frames, 1024) or audio(num_batch, num_frames, 128).
-          params: (Params) hyper-parameters
+          features: (tensor) feature inputs. Either rgb(num_batch, num_frames, 1024)
+            or audio(num_batch, num_frames, 128).
         Returns:
           A dictionary with a tensor containing the probability predictions of the
           model in the 'predictions' key. The dimensions of the tensor are
@@ -225,28 +232,17 @@ class Youtube8mModel:
 def model_fn(mode, inputs, params, trainable=True, reuse=False):
     """Model function defining the graph operations.
 
-    Args:
-        mode: (string) can be 'train' or 'eval'
-        inputs: (dict) contains the inputs of the graph (features, labels...)
-                this can be `tf.placeholder` or outputs of `tf.data`
-        params: (Params) contains hyperparameters of the model (ex: `params.learning_rate`)
-        reuse: (bool) whether to reuse the weights
-
     Returns:
         model_spec: (dict) contains the graph operations or nodes needed for training / evaluation
     """
     is_training = (mode == 'train')
     labels = inputs['labels']
     labels = tf.cast(labels, tf.int64)
-    # assert labels.get_shape().as_list() == [params.batch_size, params.vocab_size]
 
-    # -----------------------------------------------------------
     # MODEL: define the layers of the model
     with tf.variable_scope('video_level_model', reuse=reuse):
         model = Youtube8mModel(is_training, inputs, params, trainable)
         probabilities = model.forward()
-
-    #assert probabilities.get_shape().as_list() == [params.batch_size, params.vocab_size]
 
     loss = calculate_loss(probabilities, labels)
     reg_loss = tf.add_n(tf.losses.get_regularization_losses())
@@ -286,6 +282,8 @@ def model_fn(mode, inputs, params, trainable=True, reuse=False):
 
 
 def calculate_loss(predictions, labels):
+    """Compute logtis cross entropy loss.
+    """
     epsilon = 10e-6
 
     float_labels = tf.cast(labels, tf.float32)

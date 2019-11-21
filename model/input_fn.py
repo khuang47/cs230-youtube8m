@@ -40,7 +40,6 @@ class Reader:
 
         rgb = input_util.get_video_matrix(features['rgb'], 1024, self.params.max_frames)
         audio = input_util.get_video_matrix(features['audio'], 128, self.params.max_frames)
-        # labels = tf.reduce_sum(tf.one_hot(tf.sparse_tensor_to_dense(contexts['labels']), 3862), 0)
 
         # concat rgb and audio feature so that they can be (l2) normalized together.
         rgb_audio = tf.concat([rgb, audio], 1)
@@ -60,7 +59,6 @@ class Reader:
 
         for x in vid_labels:
             if x in self.label_mapping:
-
                 return True
 
         return False
@@ -81,12 +79,6 @@ class Reader:
         """
 
         if self.is_training:
-            # dataset = (tf.data.TFRecordDataset(tf.data.Dataset.from_tensor_slices(self.filenames).shuffle(100))
-            #            .shuffle(256)
-            #            .filter(self.filter_fn)
-            #            .map(self.parse_fn, num_parallel_calls=4)
-            #            .batch(self.params.batch_size_train, drop_remainder=True)
-            #            .prefetch(1))
             dataset = (tf.data.TFRecordDataset(tf.data.Dataset.from_tensor_slices(self.filenames).shuffle(100))
                        .shuffle(256).filter(self.tf_filter_fn)
                        .map(self.tf_parse_fn, num_parallel_calls=4)
