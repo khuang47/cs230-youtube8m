@@ -41,6 +41,7 @@ class Trainer:
         sess.run(self.train_model_spec['iterator_init_op'])
 
         global_step_val = 0
+        
         while True:
             try:
                 # Evaluate summaries for tensorboard only once in a while
@@ -59,9 +60,10 @@ class Trainer:
                                                     learning_rate])
 
                     gap = eval_util.calculate_gap(probabilities_val, labels_val)
+                    mean_ap = eval_util.calculate_map(probabilities_val, labels_val, self.params.vocab_size)
 
                     logging.info("- Train metrics: " + " GAP: " +
-                                 ("%.2f" % gap) + " Loss: " + str(loss_val) +
+                                 ("%.2f" % gap) + " mAP: " + ("%.2f" % mean_ap) + " Loss: " + str(loss_val) +
                                  " Learning rate: " + str(learning_rate_val) +
                                  " Epoch: " + ("%d" % epoch_val) + " Step: " + ("%d" % global_step_val))
 
@@ -100,8 +102,9 @@ class Trainer:
         try:
             loss_val, labels_val, probabilities_val = sess.run([loss, labels, probabilities])
             curr_gap = eval_util.calculate_gap(probabilities_val, labels_val)
+            curr_mean_ap = eval_util.calculate_map(probabilities_val, labels_val, self.params.vocab_size)
             logging.info("- Evaluation metrics after " + ("%d" % global_step_val) + " steps: " + " GAP: " +
-                         ("%.2f" % curr_gap) + " Loss: " + str(loss_val))
+                         ("%.2f" % curr_gap) + " mAP: " + ("%.2f" % curr_mean_ap) + " Loss: " + str(loss_val))
 
             eval_gap_summary = summary_pb2.Summary.Value(tag="gAP(evaluation)", simple_value=curr_gap)
             eval_loss_summary = summary_pb2.Summary.Value(tag="loss(evaluation)", simple_value=loss_val)

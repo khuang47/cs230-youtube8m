@@ -90,6 +90,13 @@ def calculate_gap(predictions, actuals, top_k=20):
   return gap_calculator.peek_ap_at_n()
 
 
+def calculate_map(predictions, actuals, num_class, top_k=20):
+  map_calc = map_calculator.MeanAveragePrecisionCalculator(num_class)
+  sparse_predictions, sparse_labels, num_positives = top_k_by_class(predictions, actuals, top_k)
+  map_calc.accumulate(sparse_predictions, sparse_labels, num_positives)
+  return numpy.mean(map_calc.peek_map_at_n())
+
+
 def top_k_by_class(predictions, labels, k=20):
   """Extracts the top k predictions for each video, sorted by class.
 
