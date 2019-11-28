@@ -7,8 +7,8 @@ import os
 import tensorflow as tf
 
 from model.input_fn import Reader
-from model.utils import Params
-from model.utils import set_logger
+from utils.utils import Params
+from utils.utils import set_logger
 from model.model_fn import model_fn
 from model.training import Trainer
 

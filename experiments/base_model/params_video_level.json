@@ -1,13 +1,13 @@
 {
     "learning_rate": 0.0002,
     "batch_size_train": 128,
-    "batch_size_eval": 1024,
+    "batch_size_eval": 128,
     "num_epochs": 5,
     "use_batch_norm": true,
     "bn_momentum": 0.999,
     "num_parallel_calls": 4,
     "save_summary_steps": 1,
-    "evaluate_steps": 100,
+    "evaluate_steps": 2,
 
 
     "vlad_cluster_size": 256,

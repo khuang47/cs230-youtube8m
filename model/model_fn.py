@@ -15,11 +15,13 @@ class Youtube8mModel:
         params: (Params) hyperparameters
         trainable: (bool)
     """
-    def __init__(self, is_training, inputs, params, trianable):
+    def __init__(self, is_training, rgb_audio_features, params, trianable, get_embedding=False):
         self.is_training = is_training
-        self.inputs = inputs
+        self.rgb_audio_features = rgb_audio_features
         self.params = params
         self.trianable = trianable
+        self.frame_embedding = None
+        self.get_embedding = get_embedding
 
     def forward(self):
         """ forward propagation to compute logits of the model (output distribution)
@@ -27,9 +29,8 @@ class Youtube8mModel:
         Returns:
             output: (tf.Tensor) output of the model
         """
-        rgb_audio = self.inputs['rgb_audio']
 
-        rgb_audio = tf.layers.batch_normalization(rgb_audio,
+        rgb_audio = tf.layers.batch_normalization(self.rgb_audio_features,
                                                   training=self.is_training,
                                                   name="input_bn",
                                                   trainable=self.trianable)
@@ -58,8 +59,10 @@ class Youtube8mModel:
         gate = tf.sigmoid(gate)
         activation = tf.multiply(out, gate)
 
-        # return mixture_of_expert(activation, params.num_mixtures, params)
-        return self.moe_with_gate(activation, self.params.num_mixtures)
+        self.frame_embedding = activation
+
+        if not self.get_embedding:
+            return self.moe_with_gate(activation, self.params.num_mixtures)
 
     def net_vlad(self, features, feature_size):
         """NetVLAD.
@@ -85,7 +88,7 @@ class Youtube8mModel:
                                                     momentum=self.params.bn_momentum,
                                                     training=self.is_training,
                                                     name="cluster_bn",
-                                                    trainable=self.trianable,)
+                                                    trainable=self.trianable)
         aggregation = tf.nn.softmax(aggregation)
 
         prob_sum = tf.reduce_sum(aggregation, -2, keep_dims=True)
@@ -241,7 +244,7 @@ def model_fn(mode, inputs, params, trainable=True, reuse=False):
 
     # MODEL: define the layers of the model
     with tf.variable_scope('video_level_model', reuse=reuse):
-        model = Youtube8mModel(is_training, inputs, params, trainable)
+        model = Youtube8mModel(is_training, inputs['rgb_audio'], params, trainable)
         probabilities = model.forward()
 
     loss = calculate_loss(probabilities, labels)
@@ -259,9 +262,6 @@ def model_fn(mode, inputs, params, trainable=True, reuse=False):
             staircase=True)
 
         optimizer = tf.train.AdamOptimizer(learning_rate_with_decay)
-        gradients, variables = zip(*optimizer.compute_gradients(loss))
-        gradients, _ = tf.clip_by_global_norm(gradients, params.gradient_clip_norm)
-        gradient_clip_op = optimizer.apply_gradients(zip(gradients, variables))
 
         # Add a dependency to update the moving mean and variance for batch normalization
         with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
@@ -274,7 +274,6 @@ def model_fn(mode, inputs, params, trainable=True, reuse=False):
     model_spec['probabilities'] = probabilities
 
     if is_training:
-        model_spec['gradient_clip_op'] = gradient_clip_op
         model_spec['train_op'] = train_op
         model_spec['learning_rate'] = learning_rate_with_decay
 

@@ -31,7 +31,7 @@ class Trainer:
         probabilities = self.train_model_spec['probabilities']
         labels = self.train_model_spec['labels']
         loss = self.train_model_spec['loss']
-        gradient_clip_op = self.train_model_spec['gradient_clip_op']
+
         train_op = self.train_model_spec['train_op']
 
         global_step = tf.train.get_global_step()
@@ -41,18 +41,18 @@ class Trainer:
         sess.run(self.train_model_spec['iterator_init_op'])
 
         global_step_val = 0
-        
+
         while True:
             try:
                 # Evaluate summaries for tensorboard only once in a while
                 if global_step_val % self.params.save_summary_steps == 0:
                     # Perform a mini-batch update
-                    (_, _,
+                    (_,
                      global_step_val,
                      loss_val,
                      labels_val,
                      probabilities_val,
-                     learning_rate_val) = sess.run([gradient_clip_op, train_op,
+                     learning_rate_val) = sess.run([train_op,
                                                     global_step,
                                                     loss,
                                                     labels,
@@ -72,7 +72,7 @@ class Trainer:
                     train_summary = summary_pb2.Summary(value=[train_gap_summary, train_loss_summary])
                     train_writer.add_summary(train_summary, global_step_val)
                 else:
-                    sess.run(gradient_clip_op, train_op)
+                    sess.run(train_op)
 
                 if global_step_val % self.params.evaluate_steps == 0:
                     # Evaluate on eval set
@@ -111,11 +111,11 @@ class Trainer:
             eval_summary = summary_pb2.Summary(value=[eval_gap_summary, eval_loss_summary])
             eval_writer.add_summary(eval_summary, global_step_val)
 
-            if curr_gap > self.eval_best_gap:
-                self.eval_best_gap = curr_gap
-                logging.info("Evaluation: Higher gAP found, save weights.")
-                save_path = os.path.join(self.model_dir, 'weights', 'after-step')
-                saver.save(sess, save_path, global_step=global_step_val)
+            # if curr_gap > self.eval_best_gap:
+            #     self.eval_best_gap = curr_gap
+            #     logging.info("Evaluation: Higher gAP found, save weights.")
+            #     save_path = os.path.join(self.model_dir, 'weights', 'after-step')
+            #     saver.save(sess, save_path, global_step=global_step_val)
 
         except tf.errors.OutOfRangeError:
             logging.info("Reach the end of eval dataset.")

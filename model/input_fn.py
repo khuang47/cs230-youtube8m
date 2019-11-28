@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-import model.input_util as input_util
+import utils.input_util as input_util
 
 
 class Reader:
