@@ -1,1 +1,1 @@
-Only code for training is available currently. To run: python train.py --model_dir experiments/base_model
+TBD
