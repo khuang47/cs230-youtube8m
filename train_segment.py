@@ -54,18 +54,18 @@ if __name__ == '__main__':
 
     # Create the two iterators over the two datasets
     train_reader = SegmentReader(True, train_filenames, params)
-    # dev_reader = SegmentReader(False, dev_filenames, params)
+    dev_reader = SegmentReader(False, dev_filenames, params)
     train_inputs = train_reader.input_fn()
-    # dev_inputs = dev_reader.input_fn()
+    dev_inputs = dev_reader.input_fn()
 
     # Define the model
     logging.info("Creating the model...")
     train_model_spec = model_fn('train', train_inputs, params)
-    # eval_model_spec = model_fn('eval', dev_inputs, params, reuse=True)
+    eval_model_spec = model_fn('eval', dev_inputs, params, reuse=True)
 
     # Train the model
     logging.info("Starting training for {} epoch(s)".format(params.num_epochs))
-    trainer = SegmentTrainer(train_model_spec,
+    trainer = SegmentTrainer(train_model_spec, eval_model_spec,
                       args.model_dir, params, args.segment_restore_from, args.context_restore_from,
                              args.context_aware_restore_from, args.context_ignore_restore_from)
 

@@ -104,17 +104,22 @@ class SegmentReader:
         example = iterator.get_next()
         labels, rgb_audio, segment_rgb_audio = self.tf_parse_fn(example)
         iterator_init_op = iterator.initializer
-
-        batched_labels, batched_rgb_audio, batched_segment_rgb_audio = (
-            tf.compat.v1.train.shuffle_batch([labels, rgb_audio, segment_rgb_audio],
-                                             batch_size=self.params.batch_size_train,
-                                             capacity=self.params.batch_size_train * 5,
-                                             min_after_dequeue=self.params.batch_size_train,
-                                             allow_smaller_final_batch=True, enqueue_many=True))
+        if self.is_training:
+            batched_labels, batched_rgb_audio, batched_segment_rgb_audio = (
+                tf.compat.v1.train.shuffle_batch([labels, rgb_audio, segment_rgb_audio],
+                                                 batch_size=self.params.batch_size_train,
+                                                 capacity=self.params.batch_size_train * 5,
+                                                 min_after_dequeue=self.params.batch_size_train,
+                                                 allow_smaller_final_batch=True, enqueue_many=True))
+        else:
+            batched_labels, batched_rgb_audio, batched_segment_rgb_audio = (
+                tf.compat.v1.train.shuffle_batch([labels, rgb_audio, segment_rgb_audio],
+                                                 batch_size=self.params.batch_size_eval,
+                                                 capacity=self.params.batch_size_eval * 5,
+                                                 min_after_dequeue=self.params.batch_size_eval,
+                                                 allow_smaller_final_batch=True, enqueue_many=True))
 
         inputs = {'rgb_audio': batched_rgb_audio, 'labels': batched_labels,
                   'segment_rgb_audio': batched_segment_rgb_audio, 'iterator_init_op': iterator_init_op}
-
-        # TODO: remember to call tf.train.start_queue_runners(sess=session)
 
         return inputs
