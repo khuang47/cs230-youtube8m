@@ -1,7 +1,7 @@
 # YouTube-8M understanding
 Academic project for CS230 at Stanford University.
 
-#Dataset
+## Dataset
 Please follow https://research.google.com/youtube8m/download.html to download both frame-level features dataset and
 segment-rated frame-level features dataset.
 
