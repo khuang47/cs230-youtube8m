@@ -47,17 +47,13 @@ class Trainer:
                 # Evaluate summaries for tensorboard only once in a while
                 if global_step_val % self.params.save_summary_steps == 0:
                     # Perform a mini-batch update
-                    (_,
-                     global_step_val,
-                     loss_val,
-                     labels_val,
-                     probabilities_val,
-                     learning_rate_val) = sess.run([train_op,
-                                                    global_step,
-                                                    loss,
-                                                    labels,
-                                                    probabilities,
-                                                    learning_rate])
+                    _, global_step_val, loss_val, labels_val, probabilities_val, learning_rate_val = sess.run(
+                        [train_op,
+                         global_step,
+                         loss,
+                         labels,
+                         probabilities,
+                         learning_rate])
 
                     gap = eval_util.calculate_gap(probabilities_val, labels_val)
                     mean_ap = eval_util.calculate_map(probabilities_val, labels_val, self.params.vocab_size)
@@ -111,11 +107,11 @@ class Trainer:
             eval_summary = summary_pb2.Summary(value=[eval_gap_summary, eval_loss_summary])
             eval_writer.add_summary(eval_summary, global_step_val)
 
-            # if curr_gap > self.eval_best_gap:
-            #     self.eval_best_gap = curr_gap
-            #     logging.info("Evaluation: Higher gAP found, save weights.")
-            #     save_path = os.path.join(self.model_dir, 'weights', 'after-step')
-            #     saver.save(sess, save_path, global_step=global_step_val)
+            if curr_gap > self.eval_best_gap:
+                self.eval_best_gap = curr_gap
+                logging.info("Evaluation: Higher gAP found, save weights.")
+                save_path = os.path.join(self.model_dir, 'weights', 'after-step')
+                saver.save(sess, save_path, global_step=global_step_val)
 
         except tf.errors.OutOfRangeError:
             logging.info("Reach the end of eval dataset.")

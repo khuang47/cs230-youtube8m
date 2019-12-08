@@ -68,24 +68,27 @@ def model_fn(mode, inputs, params, reuse=False):
     is_training = (mode == 'train')
     labels = inputs['labels']
     labels = tf.cast(labels, tf.int64)
+    # context model to encode the entire video, and will be kept frozen during training.
     with tf.variable_scope('context_model', reuse=reuse):
-        context_model = Youtube8mModel(is_training, inputs['rgb_audio'], params, trianable=False, get_embedding=True)
+        context_model = Youtube8mModel(is_training, inputs['rgb_audio'], params, trainable=False, get_embedding=True)
         context_model.forward()
         context_embedding = context_model.frame_embedding
 
+    # context aware model that encodes the segments.
     with tf.variable_scope('context_aware_model', reuse=reuse):
-        context_aware_model = Youtube8mModel(is_training, inputs['segment_rgb_audio'], params, trianable=True,
+        context_aware_model = Youtube8mModel(is_training, inputs['segment_rgb_audio'], params, trainable=True,
                                              get_embedding=True)
         context_aware_model.forward()
         segment_embedding = context_aware_model.frame_embedding
 
     with tf.variable_scope('context_ignore_model', reuse=reuse):
-        context_ignore_model = Youtube8mModel(is_training, inputs['segment_rgb_audio'], params, trianable=True,
+        context_ignore_model = Youtube8mModel(is_training, inputs['segment_rgb_audio'], params, trainable=True,
                                               get_embedding=False)
         context_ignore_probabilities = context_ignore_model.forward()
 
     embedding = tf.concat([context_embedding, segment_embedding], 1)
 
+    # the fully connected part of the context aware algorithm.
     with tf.variable_scope('segment_model', reuse=reuse):
         segment_model = SegmentModel(is_training, embedding, params)
         context_aware_probabilities = segment_model.forward()

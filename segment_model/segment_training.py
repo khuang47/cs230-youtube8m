@@ -42,15 +42,10 @@ class SegmentTrainer:
                 # Evaluate summaries for tensorboard only once in a while
                 if global_step_val % self.params.save_summary_steps == 0:
                     # Perform a mini-batch update
-                    (_,
-                     global_step_val,
-                     loss_val,
-                     labels_val,
-                     probabilities_val) = sess.run([train_op,
-                                                    global_step,
-                                                    loss,
-                                                    labels,
-                                                    probabilities])
+                    _, global_step_val, loss_val, labels_val, probabilities_val = sess.run([train_op,
+                                                                                            global_step,
+                                                                                            loss,labels,
+                                                                                            probabilities])
 
                     mean_ap = eval_util.calculate_map(probabilities_val, labels_val, self.params.vocab_size,
                                                       top_k=self.params.vocab_size)
@@ -66,12 +61,11 @@ class SegmentTrainer:
                     sess.run(train_op)
 
                 if global_step_val % self.params.evaluate_steps == 0:
-                    # Evaluate on eval set
                     self.evaluate_sess(sess, global_step_val, eval_writer,
                                        segment_saver, context_aware_saver, context_ignore_saver)
 
             except tf.errors.OutOfRangeError:
-                logging.info("out of range !!!!")
+                logging.info("Reach the end of the segment dataset.")
                 break
 
     def evaluate_sess(self, sess, global_step_val, eval_writer,

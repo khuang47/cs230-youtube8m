@@ -1,4 +1,4 @@
-"""Define the model."""
+"""Define the base model."""
 
 import math
 import tensorflow as tf
@@ -6,20 +6,20 @@ import tensorflow.contrib.slim as slim
 
 
 class Youtube8mModel:
-    """the model
+    """the base model
 
     Args:
         is_training: (bool) whether we are training or not
-        inputs: (dict) contains the inputs of the graph (features, labels...)
-                this can be `tf.placeholder` or outputs of `tf.data`
+        rgb_audio_features: The tensor inputs of rgb and audio features
         params: (Params) hyperparameters
-        trainable: (bool)
+        trainable: (bool) denotes if the model instance is trainable.
+        get_embedding: (bool) denotes if the model instance is to generate embeddings.
     """
-    def __init__(self, is_training, rgb_audio_features, params, trianable, get_embedding=False):
+    def __init__(self, is_training, rgb_audio_features, params, trainable, get_embedding=False):
         self.is_training = is_training
         self.rgb_audio_features = rgb_audio_features
         self.params = params
-        self.trianable = trianable
+        self.trainable = trainable
         self.frame_embedding = None
         self.get_embedding = get_embedding
 
@@ -33,7 +33,7 @@ class Youtube8mModel:
         rgb_audio = tf.layers.batch_normalization(self.rgb_audio_features,
                                                   training=self.is_training,
                                                   name="input_bn",
-                                                  trainable=self.trianable)
+                                                  trainable=self.trainable)
 
         rgb = rgb_audio[:, :, 0:1024]
         audio = rgb_audio[:, :, 1024:]
@@ -46,15 +46,15 @@ class Youtube8mModel:
         with tf.variable_scope('fc'):
             out = tf.layers.dense(vlad, self.params.fc_size, kernel_initializer=tf.
                                   random_normal_initializer(stddev=1 / math.sqrt(self.params.vlad_cluster_size)),
-                                  trainable=self.trianable
+                                  trainable=self.trainable
                                   )
         with tf.variable_scope('gate'):
             gate = tf.layers.dense(out, self.params.fc_size, use_bias=False, kernel_initializer=tf
                                    .random_normal_initializer(stddev=1 / math.sqrt(self.params.fc_size)),
-                                   trainable=self.trianable
+                                   trainable=self.trainable
                                    )
             gate = tf.layers.batch_normalization(gate, training=self.is_training, name="gating_bn",
-                                                 trainable=self.trianable)
+                                                 trainable=self.trainable)
 
         gate = tf.sigmoid(gate)
         activation = tf.multiply(out, gate)
@@ -82,20 +82,20 @@ class Youtube8mModel:
                                            use_bias=False,
                                            kernel_initializer=tf
                                            .random_normal_initializer(stddev=1 / math.sqrt(feature_size)),
-                                           trainable=self.trianable)
+                                           trainable=self.trainable)
 
         aggregation = tf.layers.batch_normalization(aggregation,
                                                     momentum=self.params.bn_momentum,
                                                     training=self.is_training,
                                                     name="cluster_bn",
-                                                    trainable=self.trianable)
+                                                    trainable=self.trainable)
         aggregation = tf.nn.softmax(aggregation)
 
         prob_sum = tf.reduce_sum(aggregation, -2, keep_dims=True)
         cluster_weights = tf.get_variable("cluster_weights",
                                           [1, feature_size, self.params.vlad_cluster_size],
                                           initializer=tf.random_normal_initializer(stddev=1 / math.sqrt(feature_size)),
-                                          trainable=self.trianable)
+                                          trainable=self.trainable)
         cluster_center = tf.multiply(prob_sum, cluster_weights)  # element-wise multiply with broadcasting
         aggregation = tf.transpose(aggregation, perm=[0, 2, 1])
 
@@ -126,7 +126,7 @@ class Youtube8mModel:
             biases_initializer=None,
             weights_regularizer=slim.l2_regularizer(self.params.moe_l2),
             scope="gates",
-            trainable=self.trianable
+            trainable=self.trainable
         )
         expert_activations = slim.fully_connected(
             features,
@@ -134,7 +134,7 @@ class Youtube8mModel:
             activation_fn=None,
             weights_regularizer=slim.l2_regularizer(self.params.moe_l2),
             scope="experts",
-            trainable=self.trianable
+            trainable=self.trainable
         )
 
         gating_distribution = tf.nn.softmax(
@@ -159,9 +159,8 @@ class Youtube8mModel:
             or audio(num_batch, num_frames, 128).
           num_mixtures: number of experts for this layer.
         Returns:
-          A dictionary with a tensor containing the probability predictions of the
-          model in the 'predictions' key. The dimensions of the tensor are
-          batch_size x num_classes.
+          A tensor of the probability predictions of the model. The dimensions of the
+          tensor are batch_size x num_classes.
         """
         gate_activations = slim.fully_connected(
             features,
@@ -170,7 +169,7 @@ class Youtube8mModel:
             biases_initializer=None,
             weights_regularizer=slim.l2_regularizer(self.params.moe_l2),
             scope="gates",
-            trainable=self.trianable
+            trainable=self.trainable
         )
 
         expert_activations = slim.fully_connected(
@@ -179,7 +178,7 @@ class Youtube8mModel:
             activation_fn=None,
             weights_regularizer=slim.l2_regularizer(self.params.moe_l2),
             scope="experts",
-            trainable=self.trianable
+            trainable=self.trainable
         )
 
         gating_distribution = tf.nn.softmax(tf.reshape(
@@ -198,7 +197,7 @@ class Youtube8mModel:
                                          [self.params.vocab_size, self.params.vocab_size],
                                          initializer=tf
                                          .random_normal_initializer(stddev=1 / math.sqrt(self.params.vocab_size)),
-                                         trainable=self.trianable
+                                         trainable=self.trainable
                                          )
         gates = tf.matmul(probabilities, gating_weights)
 
@@ -208,7 +207,7 @@ class Youtube8mModel:
             scale=True,
             is_training=self.is_training,
             scope="gating_prob_bn",
-            trainable=self.trianable
+            trainable=self.trainable
         )
         gates = tf.sigmoid(gates)
         return tf.multiply(probabilities, gates)
@@ -219,24 +218,20 @@ class Youtube8mModel:
           features: (tensor) feature inputs. Either rgb(num_batch, num_frames, 1024)
             or audio(num_batch, num_frames, 128).
         Returns:
-          A dictionary with a tensor containing the probability predictions of the
-          model in the 'predictions' key. The dimensions of the tensor are
-          batch_size x num_classes.
+          A tensor of the probability predictions of the model. The dimensions of the
+          tensor are batch_size x num_classes.
         """
         probabilities = slim.fully_connected(
             features,
             self.params.vocab_size,
             activation_fn=tf.nn.sigmoid,
-            trainable=self.trianable
+            trainable=self.trainable
         )
         return probabilities
 
 
 def model_fn(mode, inputs, params, trainable=True, reuse=False):
     """Model function defining the graph operations.
-
-    Returns:
-        model_spec: (dict) contains the graph operations or nodes needed for training / evaluation
     """
     is_training = (mode == 'train')
     labels = inputs['labels']
