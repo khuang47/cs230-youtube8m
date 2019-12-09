@@ -85,7 +85,8 @@ class Reader:
                        .batch(self.params.batch_size_train, drop_remainder=True)
                        .prefetch(1))
         else:
-            dataset = (tf.data.TFRecordDataset(tf.data.Dataset.from_tensor_slices(self.filenames)).filter(self.tf_filter_fn)
+            dataset = (tf.data.TFRecordDataset(tf.data.Dataset.from_tensor_slices(self.filenames))
+                       .filter(self.tf_filter_fn)
                        .map(self.tf_parse_fn, num_parallel_calls=4)
                        .batch(self.params.batch_size_eval, drop_remainder=True)
                        .prefetch(1))
